@@ -1,0 +1,14 @@
+# Saved connections (server names, logins, passwords)
+connections.json
+
+# Installed by start.bat / npm
+node_modules/
+runtime/
+
+# Personal shortcut with local paths
+*.lnk
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store

@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en" data-theme="blue">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Web SQL Studio</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<script>try { var s = JSON.parse(localStorage.getItem('webSqlStudio.v2')); if (s && s.theme) document.documentElement.dataset.theme = s.theme; } catch (e) {}</script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav id="menubar" class="menubar">
+  <span class="mb-item" data-menu="file">File</span>
+  <span class="mb-item" data-menu="edit">Edit</span>
+  <span class="mb-item" data-menu="view">View</span>
+  <span class="mb-item" data-menu="query">Query</span>
+  <span class="mb-item" data-menu="tools">Tools</span>
+  <span class="mb-item" data-menu="window">Window</span>
+  <span class="mb-item" data-menu="help">Help</span>
+  <span class="spacer"></span>
+  <span class="mb-title">Web SQL Studio</span>
+</nav>
+
+<div class="toolbars">
+  <div class="tbar">
+    <span class="grip"></span>
+    <button class="tb" id="tbBack" title="Navigate Backward" disabled><i data-icon="back"></i></button>
+    <button class="tb" id="tbForward" title="Navigate Forward" disabled><i data-icon="forward"></i></button>
+    <span class="tsep"></span>
+    <button class="tb wide" id="tbNewQuery" title="New Query (Alt+N)"><i data-icon="newQuery"></i><span>New Query</span></button>
+    <span class="tsep"></span>
+    <button class="tb" id="tbOpen" title="Open File (Ctrl+O)"><i data-icon="open"></i></button>
+    <button class="tb" id="tbSave" title="Save (Ctrl+S)"><i data-icon="save"></i></button>
+    <button class="tb" id="tbSaveAll" title="Save All"><i data-icon="saveAll"></i></button>
+    <span class="tsep"></span>
+    <button class="tb" id="tbCut" title="Cut (Ctrl+X)"><i data-icon="cut"></i></button>
+    <button class="tb" id="tbCopy" title="Copy (Ctrl+C)"><i data-icon="copy"></i></button>
+    <button class="tb" id="tbPaste" title="Paste (Ctrl+V)"><i data-icon="paste"></i></button>
+    <span class="tsep"></span>
+    <button class="tb" id="tbUndo" title="Undo (Ctrl+Z)"><i data-icon="undo"></i></button>
+    <button class="tb" id="tbRedo" title="Redo (Ctrl+Y)"><i data-icon="redo"></i></button>
+    <span class="tsep"></span>
+    <button class="tb" id="tbActivity" title="Activity Monitor"><i data-icon="activity"></i></button>
+    <button class="tb" id="tbHistory" title="Query History"><i data-icon="history"></i></button>
+    <button class="tb" id="tbFind" title="Find (Ctrl+F)"><i data-icon="find"></i></button>
+  </div>
+  <div class="tbar">
+    <span class="grip"></span>
+    <button class="tb" id="tbConnect" title="Connect…"><i data-icon="connect"></i></button>
+    <button class="tb" id="tbChangeConn" title="Change Connection"><i data-icon="changeConn"></i></button>
+    <span class="tsep"></span>
+    <select id="dbSelect" class="tbselect" title="Available Databases (Ctrl+U)"></select>
+    <button class="tb wide exec" id="tbExecute" title="Execute (F5)"><i data-icon="execute"></i><span>Execute</span></button>
+    <button class="tb" id="tbDebug" title="Debug (not available)" disabled><i data-icon="debug"></i></button>
+    <button class="tb" id="tbCancel" title="Cancel Executing Query (Alt+Break)" disabled><i data-icon="cancel"></i></button>
+    <button class="tb" id="tbParse" title="Parse (Ctrl+F5)"><i data-icon="parse"></i></button>
+    <span class="tsep"></span>
+    <button class="tb" id="tbEstPlan" title="Display Estimated Execution Plan (Ctrl+L)"><i data-icon="estPlan"></i></button>
+    <button class="tb" id="tbOptions" title="Query Options…"><i data-icon="queryOptions"></i></button>
+    <button class="tb toggle" id="tbIntelli" title="IntelliSense Enabled (Ctrl+B, Ctrl+I)"><i data-icon="intellisense"></i></button>
+    <span class="tsep"></span>
+    <button class="tb toggle" id="tbActPlan" title="Include Actual Execution Plan (Ctrl+M)"><i data-icon="actualPlan"></i></button>
+    <span class="tsep"></span>
+    <button class="tb toggle" id="tbText" title="Results to Text"><i data-icon="resultsText"></i></button>
+    <button class="tb toggle" id="tbGrid" title="Results to Grid (Ctrl+D)"><i data-icon="resultsGrid"></i></button>
+    <span class="tsep"></span>
+    <button class="tb" id="tbComment" title="Comment out the selected lines (Ctrl+K, Ctrl+C)"><i data-icon="comment"></i></button>
+    <button class="tb" id="tbUncomment" title="Uncomment the selected lines (Ctrl+K, Ctrl+U)"><i data-icon="uncomment"></i></button>
+    <button class="tb" id="tbOutdent" title="Decrease Indent (Shift+Tab)"><i data-icon="outdent"></i></button>
+    <button class="tb" id="tbIndent" title="Increase Indent (Tab)"><i data-icon="indent"></i></button>
+  </div>
+</div>
+
+<main class="layout">
+  <aside id="explorer" class="toolwin">
+    <div class="tw-title"><span>Object Explorer</span><span class="spacer"></span>
+      <button class="tw-btn" id="oePin" title="Auto Hide"><i data-icon="pin"></i></button>
+      <button class="tw-btn" id="oeClose" title="Close (View → Object Explorer, F8)"><i data-icon="close"></i></button>
+    </div>
+    <div class="oe-toolbar">
+      <button class="tb wide" id="oeConnect" title="Connect Object Explorer"><span>Connect</span><span class="caret">▾</span></button>
+      <button class="tb" id="oeConnectIcon" title="Connect Object Explorer"><i data-icon="connect"></i></button>
+      <button class="tb" id="oeDisconnect" title="Disconnect"><i data-icon="disconnect"></i></button>
+      <button class="tb" id="oeStop" title="Stop" disabled><i data-icon="stop"></i></button>
+      <button class="tb" id="oeFilter" title="Filter"><i data-icon="filter"></i></button>
+      <button class="tb" id="oeRefresh" title="Refresh (F5)"><i data-icon="refresh"></i></button>
+      <button class="tb" id="oeActivity" title="Activity Monitor"><i data-icon="activity"></i></button>
+      <button class="tb" id="oeDetails" title="Object Explorer Details (F7)"><i data-icon="details"></i></button>
+    </div>
+    <input id="filter" class="oe-search" type="search" placeholder="Search objects by name…" spellcheck="false" autocomplete="off">
+    <div id="tree" class="tree" tabindex="0"></div>
+  </aside>
+  <div id="splitX" class="vsplit"></div>
+  <section id="work" class="work">
+    <nav id="tabs" class="tabs"></nav>
+    <div id="editors" class="editors"></div>
+    <div id="splitY" class="hsplit"></div>
+    <div id="resultsHost" class="results-host"></div>
+    <div id="qstatus" class="qstatus">
+      <span id="qsState" class="qs-state">Ready</span>
+      <span class="spacer"></span>
+      <span id="qsServer" class="qs-cell"></span>
+      <span id="qsLogin" class="qs-cell"></span>
+      <span id="qsDb" class="qs-cell"></span>
+      <span id="qsTime" class="qs-cell">00:00:00</span>
+      <span id="qsRows" class="qs-cell">0 rows</span>
+    </div>
+  </section>
+</main>
+
+<footer class="statusbar">
+  <span id="sbState">Ready</span>
+  <span id="sbTran" class="sb-tran" hidden></span>
+  <span class="spacer"></span>
+  <span id="sbLn">Ln 1</span>
+  <span id="sbCol">Col 1</span>
+  <span id="sbCh">Ch 1</span>
+  <span>INS</span>
+</footer>
+
+<input type="file" id="fileInput" accept=".sql,.txt" hidden>
+<div id="toast" class="toast" hidden></div>
+<div id="modal" class="modal" hidden>
+  <div class="mbox">
+    <div class="mhead">
+      <span id="mTitle"></span>
+      <span class="spacer"></span>
+      <button id="mCopy">Copy</button>
+      <button id="mClose" class="icon-btn" title="Close (Esc)">&times;</button>
+    </div>
+    <textarea id="mText" readonly spellcheck="false"></textarea>
+  </div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
