@@ -65,13 +65,17 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
 
-export function cardSprite(node, color, maxRows, selected, scale = 1) {
+// data (optional): { values: Map(lower-case column name -> value), note, key } turns the card into one row of the
+// table: each column shows its value instead of its type.
+export function cardSprite(node, color, maxRows, selected, scale = 1, data = null) {
   const t = node.t;
   let cols = t.c;
+  const valueOf = col => (data ? data.values.get(col[0].toLowerCase()) : undefined);
   if (cols.length > maxRows) {
-    // keep keys first when the list is cut, then fill up in table order
+    // keep keys first when the list is cut (then columns that have a value), then fill up in table order
     const keep = new Set();
     cols.forEach((c, i) => { if (c[2] & (F_PK | F_FK) && keep.size < maxRows) keep.add(i); });
+    if (data) cols.forEach((c, i) => { const v = valueOf(c); if (v !== null && v !== undefined && v !== '' && keep.size < maxRows) keep.add(i); });
     cols.forEach((c, i) => { if (keep.size < maxRows) keep.add(i); });
     cols = cols.filter((c, i) => keep.has(i));
   }
@@ -90,11 +94,12 @@ export function cardSprite(node, color, maxRows, selected, scale = 1) {
 
   // header: name on the left, size on the right
   ctx.textBaseline = 'middle';
-  const right = node.isView ? 'VIEW' : (node.rows != null ? node.rows.toLocaleString('en-US') + ' rows' : '');
   ctx.font = `500 12px ${UI_FONT}`; ctx.fillStyle = 'rgba(255,255,255,0.88)'; ctx.textAlign = 'right';
-  const rw = right ? ctx.measureText(right).width + 10 : 0;
+  const right = data ? fit(ctx, data.key || '', 170) : node.isView ? 'VIEW' : (node.rows != null ? node.rows.toLocaleString('en-US') + ' rows' : '');
+  const top = data ? data.note || '' : `${t.c.length} cols`;
+  const rw = Math.max(ctx.measureText(right).width, ctx.measureText(top).width) + 10;
   if (right) ctx.fillText(right, CARD_W - PAD, HEAD / 2 + 8);
-  ctx.fillText(`${t.c.length} cols`, CARD_W - PAD, HEAD / 2 - 8);
+  ctx.fillText(top, CARD_W - PAD, HEAD / 2 - 8);
   ctx.textAlign = 'left'; ctx.fillStyle = '#ffffff';
   ctx.font = `700 18px ${UI_FONT}`;
   ctx.fillText(fit(ctx, node.full, CARD_W - 2 * PAD - Math.max(rw, 60)), PAD, HEAD / 2 + 1);
@@ -106,13 +111,23 @@ export function cardSprite(node, color, maxRows, selected, scale = 1) {
     ctx.font = `700 10px ${UI_FONT}`;
     if (pk) { ctx.fillStyle = '#e3b341'; ctx.fillText('PK', PAD, y + ROW / 2 + 1); }
     if (fk) { ctx.fillStyle = '#7fb2f5'; ctx.fillText('FK', PAD + (pk ? 17 : 0), y + ROW / 2 + 1); }
-    ctx.font = `13px ${MONO}`; ctx.fillStyle = MUTE; ctx.textAlign = 'right';
-    const ty = fit(ctx, col[1], 130);
+    ctx.textAlign = 'right';
+    let ty;
+    if (data) {
+      // the value of this column in the row
+      const v = valueOf(col);
+      const empty = v === null || v === undefined;
+      ctx.font = `${empty ? 'italic 12px' : '600 13.5px'} ${UI_FONT}`; ctx.fillStyle = empty ? MUTE : '#ffffff';
+      ty = fit(ctx, empty ? 'NULL' : String(v).replace(/\s+/g, ' '), 215);
+    } else {
+      ctx.font = `13px ${MONO}`; ctx.fillStyle = MUTE;
+      ty = fit(ctx, col[1], 130);
+    }
     const tw = ctx.measureText(ty).width;
     ctx.fillText(ty, CARD_W - PAD, y + ROW / 2 + 1);
     ctx.textAlign = 'left';
-    ctx.font = `${pk ? 700 : 400} 14px ${MONO}`;
-    ctx.fillStyle = col[2] & F_NULL ? INK2 : INK;
+    ctx.font = `${pk ? 700 : 400} ${data ? 13 : 14}px ${MONO}`;
+    ctx.fillStyle = data || col[2] & F_NULL ? INK2 : INK;
     ctx.fillText(fit(ctx, col[0], CARD_W - PAD - 44 - tw - 14), PAD + 40, y + ROW / 2 + 1);
   });
   if (more) {

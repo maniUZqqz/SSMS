@@ -1,15 +1,18 @@
 // Row explorer of the database map: the rows of a table, and "one row" mode - a single row together with the rows
 // it points to (through its foreign keys) and the rows in other tables that point to it. Read-only.
+// In "one row" mode the cards in the 3D scene show the row's values under the column names, and a click on a
+// lit table moves on to its related row(s).
 import { $, fa, esc, trunc } from './util.js';
 
 const PAGE = 60;           // rows fetched at a time
 const MAX_COLS = 60;       // columns drawn in the grid; the row card always shows all of them
 const COUNT_CAP = 1000;    // "1,000+" beyond this
+const CHILD_CARDS = 6;     // related tables (pointing to the row) whose latest row is fetched for their card
 const F_PK = 1, F_FK = 16;
 
 export function createData({ api, mapId }) {
   let app = null;
-  let view = null;         // the drawer: { node, where, columns, rows, more, loading, error }
+  let view = null;         // the drawer: { node, where, columns, rows, more, loading, error, min }
   let cur = null;          // the open row: { node, cols, row, val, parents, children, structure }
   let trail = [];          // rows visited before the open one
   let moving = false;      // true while this module itself changes the selected table
@@ -19,6 +22,8 @@ export function createData({ api, mapId }) {
   const cell = (v, max = 90) => (v === null || v === undefined ? '<i class="null">NULL</i>'
     : esc(trunc(String(v), /^0x[0-9A-F]{30,}/.test(v) ? 28 : max)));
   const whereText = w => (w || []).map(x => `${x.col} ${x.op === 'contains' ? '∋' : x.op === 'starts' ? '^' : x.op === 'null' ? 'IS NULL' : '='} ${x.op === 'null' ? '' : x.value}`).join(' , ');
+  const valuesOf = (columns, row) => new Map(columns.map((c, i) => [(c.name || c).toLowerCase(), row[i]]));
+  const childWhere = (c, ch) => ch.fk.cols.map(([col, ref]) => ({ col, op: '=', value: c.val.get(ref.toLowerCase()) }));
 
   // ============================== drawer: rows of one table ==============================
   async function load(append) {
@@ -39,7 +44,7 @@ export function createData({ api, mapId }) {
     renderDrawer();
   }
   function openTable(node, where) {
-    view = { node, where: where && where.length ? where : null, columns: [], rows: [], more: false };
+    view = { node, where: where && where.length ? where : null, columns: [], rows: [], more: false, min: false };
     load(false);
   }
   function closeDrawer() { view = null; renderDrawer(); }
@@ -50,6 +55,8 @@ export function createData({ api, mapId }) {
     document.body.classList.toggle('has-data', !!view);
     if (!view) return;
     const v = view, n = v.node;
+    el.classList.toggle('min', !!v.min);
+    $('#data-toggle').textContent = v.min ? 'نمایش سطرها ▴' : 'جمع‌کردن ▾';
     $('#data-title').textContent = n.full;
     $('#data-info').innerHTML = v.loading ? 'در حال خواندن سطرها…'
       : v.error ? `<span class="err">خواندن سطرها ممکن نشد: <span dir="auto">${esc(v.error)}</span></span>`
@@ -86,6 +93,7 @@ export function createData({ api, mapId }) {
     if (tr && view) openCase(view.node, view.columns.map(c => c.name), view.rows[+tr.dataset.i]);
   });
   $('#data-close').addEventListener('click', closeDrawer);
+  $('#data-toggle').addEventListener('click', () => { if (view) { view.min = !view.min; renderDrawer(); } });
   const applyFilter = () => {
     if (!view) return;
     const op = $('#f-op').value, value = $('#f-val').value;
@@ -98,11 +106,9 @@ export function createData({ api, mapId }) {
   $('#f-clear').addEventListener('click', () => { if (view) { view.where = null; load(false); } });
 
   // ============================== one row and everything related to it ==============================
-  function keyText(c) {
-    const pk = c.node.t.c.filter(x => x[2] & F_PK).map(x => x[0]);
-    const names = pk.length ? pk : c.cols.slice(0, 1);
-    return names.map(nm => `${nm} = ${c.val.get(nm.toLowerCase())}`).join(' , ');
-  }
+  const keyCols = c => { const pk = c.node.t.c.filter(x => x[2] & F_PK).map(x => x[0]); return pk.length ? pk : c.cols.slice(0, 1); };
+  const keyText = c => keyCols(c).map(nm => `${nm} = ${c.val.get(nm.toLowerCase())}`).join(' , ');
+  const keyValues = c => keyCols(c).map(nm => c.val.get(nm.toLowerCase())).join(' , ');
   // a short human hint for a row: its first few text values
   function preview(columns, row) {
     const out = [];
@@ -113,11 +119,11 @@ export function createData({ api, mapId }) {
     return out.join(' · ');
   }
 
-  function openCase(node, cols, row, keepTrail) {
-    if (cur && !keepTrail) trail.push(cur);
-    const val = new Map(cols.map((c, i) => [c.toLowerCase(), row[i]]));
+  function openCase(node, cols, row) {
+    // another row of the same table replaces the open one; a row of another table is a step forward
+    if (cur && cur.node !== node) trail.push(cur);
     cur = {
-      node, cols, row, val, structure: false,
+      node, cols, row, val: valuesOf(cols, row), structure: false,
       parents: [...node.out, ...node.self].map(fk => ({ fk, state: 'wait' })),
       children: node.inc.map(fk => ({ fk, count: undefined })),
     };
@@ -126,18 +132,22 @@ export function createData({ api, mapId }) {
     loadChildren(cur);
   }
   function show() {
+    document.body.classList.add('case-on');      // the drawer makes room for the row's card in the scene
+    if (view) renderDrawer();
     moving = true;
     app.select(cur.node);            // the detail panel asks detailOverride() below and draws the row card
     moving = false;
     paint3D();
-    if (view) renderDrawer();
   }
   function endCase() {
     cur = null; trail = [];
+    document.body.classList.remove('case-on');
     app.setCase(null);
     if (view) renderDrawer();
   }
 
+  // The scene: the tables holding related rows stay lit, their labels carry the number of rows,
+  // and their cards show the related row itself (see cardData below).
   function paint3D() {
     if (!cur) return;
     const related = new Map();
@@ -146,11 +156,19 @@ export function createData({ api, mapId }) {
       if (!c.count) continue;
       const n = app.nodes[c.fk.from];
       const prev = related.get(n);
-      const total = (prev && prev.n ? prev.n : 0) + c.count;
-      related.set(n, { n: total });
+      related.set(n, { n: (prev && prev.n ? prev.n : 0) + c.count });
     }
     for (const [n, v] of related) if (v && v.n) related.set(n, `× ${v.n > COUNT_CAP ? COUNT_CAP + '+' : v.n}`);
     app.setCase(related);
+  }
+  function cardData(n) {
+    if (!cur || cur.structure) return null;
+    if (n === cur.node) return { values: cur.val, note: 'همین سطر', key: keyValues(cur) };
+    const p = cur.parents.find(x => x.state === 'found' && app.nodes[x.fk.to] === n);
+    if (p) return { values: valuesOf(p.columns, p.row), note: 'سطر مرجع', key: p.fk.cols.map(([col]) => cur.val.get(col.toLowerCase())).join(' , ') };
+    const ch = cur.children.find(x => x.row && app.nodes[x.fk.from] === n);
+    if (ch) return { values: valuesOf(ch.columns, ch.row), note: `جدیدترین از ${ch.count > COUNT_CAP ? COUNT_CAP + '+' : ch.count} سطر`, key: '' };
+    return null;
   }
 
   async function loadParents(c) {
@@ -173,10 +191,7 @@ export function createData({ api, mapId }) {
     const list = only !== undefined ? [only] : c.children.map((x, i) => i);
     for (let at = 0; at < list.length; at += 12) {
       const slice = list.slice(at, at + 12);
-      const items = slice.map(i => {
-        const ch = c.children[i];
-        return { table: tableName(app.nodes[ch.fk.from]), where: ch.fk.cols.map(([col, ref]) => ({ col, op: '=', value: c.val.get(ref.toLowerCase()) })) };
-      });
+      const items = slice.map(i => ({ table: tableName(app.nodes[c.children[i].fk.from]), where: childWhere(c, c.children[i]) }));
       // a row whose key is NULL cannot be referenced
       const usable = items.map(it => it.where.every(w => w.value !== null && w.value !== undefined));
       try {
@@ -192,6 +207,27 @@ export function createData({ api, mapId }) {
       paint3D();
     }
     patch('child-sum', childSummary(c));
+    // now that the counts are known, the tables that do have rows come first in the list (without redrawing the card)
+    const firstChild = document.querySelector('#detail [data-case="child"]');
+    if (firstChild && cur === c) {
+      const sec = firstChild.parentElement;
+      [...sec.querySelectorAll('[data-case="child"]')]
+        .sort((a, b) => (c.children[+b.dataset.i].count || 0) - (c.children[+a.dataset.i].count || 0))
+        .forEach(b => sec.appendChild(b));
+    }
+    // the nearest related tables also get their latest row, to show on their card in the scene
+    const s = c.node;
+    const near = c.children.filter(x => x.count > 0 && !x.row)
+      .sort((a, b) => { const A = app.nodes[a.fk.from], B = app.nodes[b.fk.from]; return Math.hypot(A.x - s.x, A.y - s.y, A.z - s.z) - Math.hypot(B.x - s.x, B.y - s.y, B.z - s.z); })
+      .slice(0, CHILD_CARDS);
+    for (const ch of near) {
+      try {
+        const r = await api('mapRows', { id: mapId, table: tableName(app.nodes[ch.fk.from]), where: childWhere(c, ch), top: 1 });
+        if (cur !== c) return;
+        if (r.rows.length) { ch.columns = r.columns; ch.row = r.rows[0]; }
+      } catch (e) { if (cur !== c) return; }
+    }
+    if (near.length) paint3D();
   }
 
   const parentState = p => (p.state === 'wait' ? '<span class="muted">…</span>'
@@ -221,11 +257,11 @@ export function createData({ api, mapId }) {
     // the way here, row by row; a click on a step goes back to it
     const steps = [...trail, c];
     const path = steps.length > 1 ? `<div class="case-path">${steps.map((s, i) =>
-      `<button class="crumb${s === c ? ' on' : ''}" data-case="jump" data-i="${i}" title="${esc(keyText(s))}"><span class="mono">${esc(s.node.name)}</span><small class="mono">${esc(trunc(keyText(s).replace(/^.*= /, ''), 16))}</small></button>`).join('<i>›</i>')}</div>` : '';
+      `<button class="crumb${s === c ? ' on' : ''}" data-case="jump" data-i="${i}" title="${esc(keyText(s))}"><span class="mono">${esc(s.node.name)}</span><small class="mono">${esc(trunc(keyValues(s), 22))}</small></button>`).join('<i>›</i>')}</div>` : '';
     let h = `<header><div class="d-kind">یک سطر از جدول<span class="mono">${esc(n.schema)}</span></div>` +
       `<h2 class="mono">${esc(n.name)}</h2><button class="x" id="d-close" title="بستن (Esc)">✕</button>` +
       `<div class="case-key mono">${esc(trunc(keyText(c), 120))}</div>${path}` +
-      `<p class="case-hint">برای جلو رفتن: روی یک <b class="lnk">مقدار آبی</b> یا یکی از «سطرهای مرجع» کلیک کنید تا همان سطر باز شود؛ یا روی یکی از «سطرهای وابسته» کلیک کنید تا سطرهایش پایین صفحه بیاید و از آن‌جا سطر بعدی را انتخاب کنید.</p></header>` +
+      `<p class="case-hint">مقدارهای این سطر روی کارتِ جدول در صحنه هم هست. برای جلو رفتن روی یک <b class="lnk">مقدار آبی</b>، یکی از فهرست‌های پایین، یا یک جدولِ روشن در صحنه کلیک کنید.</p></header>` +
       `<div class="d-actions">${trail.length ? `<button data-case="back">→ سطر قبلی</button>` : ''}` +
       `<button data-case="rows">سطرهای این جدول</button><button data-case="structure">ساختار جدول</button></div>`;
 
@@ -257,15 +293,24 @@ export function createData({ api, mapId }) {
     return h;
   }
 
+  function goParent(p) {
+    if (p.state === 'found') openCase(app.nodes[p.fk.to], p.columns.map(x => x.name), p.row);
+  }
+  function goChild(i) {
+    const ch = cur.children[i];
+    if (ch.count === null && !ch.error) { ch.count = undefined; patch(`c${i}`, childState(ch)); return loadChildren(cur, i); }
+    openTable(app.nodes[ch.fk.from], childWhere(cur, ch));
+  }
+
   $('#detail').addEventListener('click', ev => {
     const b = ev.target.closest('[data-case]');
     if (!b) return;
     ev.stopPropagation();
     const act = b.dataset.case, sel = app.state.selected;
     if (act === 'open') return openTable(sel);                           // from the structure view
-    if (act === 'resume' && cur) { cur.structure = false; return app.refreshDetail(); }
+    if (act === 'resume' && cur) { cur.structure = false; app.refreshDetail(); return app.refreshCards(); }
     if (!cur) return;
-    if (act === 'structure') { cur.structure = true; return app.refreshDetail(); }
+    if (act === 'structure') { cur.structure = true; app.refreshDetail(); return app.refreshCards(); }
     if (act === 'rows') return openTable(cur.node);
     if (act === 'back') { cur = trail.pop(); return show(); }
     const i = +b.dataset.i;
@@ -273,14 +318,8 @@ export function createData({ api, mapId }) {
       if (i < trail.length) { cur = trail[i]; trail = trail.slice(0, i); show(); }
       return;
     }
-    if (act === 'parent') {
-      const p = cur.parents[i];
-      if (p.state === 'found') openCase(app.nodes[p.fk.to], p.columns.map(x => x.name), p.row);
-    } else if (act === 'child') {
-      const ch = cur.children[i];
-      if (ch.count === null && !ch.error) { ch.count = undefined; patch(`c${i}`, childState(ch)); return loadChildren(cur, i); }
-      openTable(app.nodes[ch.fk.from], ch.fk.cols.map(([col, ref]) => ({ col, op: '=', value: cur.val.get(ref.toLowerCase()) })));
-    }
+    if (act === 'parent') goParent(cur.parents[i]);
+    else if (act === 'child') goChild(i);
   }, true);
 
   return {
@@ -290,5 +329,16 @@ export function createData({ api, mapId }) {
     detailOverride: n => (cur && cur.node === n && !cur.structure ? caseHtml(cur) : null),
     detailActions: n => `<button data-case="open" class="go" title="سطرهای این جدول را نشان می‌دهد؛ با کلیک روی هر سطر، سطرهای مرتبطش در جدول‌های دیگر را دنبال کنید">سطرها و دنبال‌کردن موردی ▸</button>${cur && cur.node === n ? '<button data-case="resume">بازگشت به سطر</button>' : ''}`,
     onSelect: n => { if (!moving && cur && n !== cur.node) endCase(); },
+    // the cards in the scene: the row's values instead of column types
+    cardData,
+    // a click on a lit table in the scene moves on: to the row this row points to, or to the rows pointing to it
+    onNodeClick: n => {
+      if (!cur || cur.structure || n === cur.node) return false;
+      const p = cur.parents.find(x => x.state === 'found' && app.nodes[x.fk.to] === n);
+      if (p) { goParent(p); return true; }
+      const i = cur.children.findIndex(x => x.count > 0 && app.nodes[x.fk.from] === n);
+      if (i >= 0) { goChild(i); return true; }
+      return false;
+    },
   };
 }

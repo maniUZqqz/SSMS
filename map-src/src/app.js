@@ -152,7 +152,7 @@ async function start() {
     .linkDirectionalArrowLength(() => (many() ? 0 : 3.5)).linkDirectionalArrowRelPos(1).linkDirectionalArrowColor(selLinkColor)
     .linkLabel(linkTip).linkHoverPrecision(2)
     .enableNodeDrag(false).warmupTicks(0).cooldownTicks(0)
-    .onNodeClick(n => select(n))
+    .onNodeClick(n => { if (!(ctx.onNodeClick && ctx.onNodeClick(n))) select(n); })
     .onLinkClick(l => { const s = state.selected; select(nodes[s && s.id === l.a ? l.b : s && s.id === l.b ? l.a : l.b]); })
     .onBackgroundClick(() => { if (state.selected) select(null); else if (state.spot) setSpot(null); })
     .graphData({ nodes, links });
@@ -234,10 +234,17 @@ async function start() {
     const W = window.innerWidth, H = window.innerHeight, k = H / (2 * Math.tan((camera.fov * Math.PI) / 360));
     const left = 464, right = document.body.classList.contains('side-closed') ? 0 : 300;
     const nodeX = left + Math.max(0, (W - left - right - 530) / 2) + 90;
-    const off = (Math.max(0, W / 2 - nodeX) * dist) / k;
+    // vertically: the card hangs down from the table, so the table sits high enough for the whole card to stay
+    // above whatever covers the bottom of the window (the rows drawer)
+    const drawer = document.querySelector('#data');
+    const bottom = drawer && !drawer.hidden ? drawer.getBoundingClientRect().top - 12 : H - 20;
+    const cardH = ((48 + Math.min(n.cols, 30) * 23 + 8) * 440) / 460;
+    const nodeY = Math.max(138, Math.min(H / 2, bottom - cardH + 24));
     const side = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), dir);
     if (side.lengthSq() < 1e-6) side.set(1, 0, 0);
-    side.normalize().multiplyScalar(off);
+    side.normalize();
+    const up = new THREE.Vector3().crossVectors(dir, side).normalize();
+    side.multiplyScalar((Math.max(0, W / 2 - nodeX) * dist) / k).addScaledVector(up, -((H / 2 - nodeY) * dist) / k);
     const t = { x: n.x + side.x, y: n.y + side.y, z: n.z + side.z };
     graph.cameraPosition({ x: t.x + dir.x * dist, y: t.y + dir.y * dist, z: t.z + dir.z * dist }, t, ms);
   }
@@ -274,7 +281,9 @@ async function start() {
       s.center.set(0.5, 0);
       s.position.set(0, n.radius * 1.12 + 0.6, 0);
     } else {
-      s = cardSprite(n, baseColor(n) === NEUTRAL ? '#5d5c57' : baseColor(n), kind === 'cardSel' ? 30 : 12, kind === 'cardSel', kind === 'cardSel' ? selScale(n) : 1);
+      // while one row is being followed, the cards of the tables involved show that row's values instead of column types
+      const data = ctx.cardData ? ctx.cardData(n) : null;
+      s = cardSprite(n, baseColor(n) === NEUTRAL ? '#5d5c57' : baseColor(n), kind === 'cardSel' ? 30 : 12, kind === 'cardSel', kind === 'cardSel' ? selScale(n) : 1, data);
     }
     obj.add(s);
     lod.set(n, { kind, sprite: s });
@@ -340,9 +349,11 @@ async function start() {
       if (sel.__scr) { const r = (sel.radius * 1.9 * k) / sel.__scr.d; boxes.push([sel.__scr.x - r, sel.__scr.y - r, sel.__scr.x + r, sel.__scr.y + r]); }
     }
     if (state.showCards) {
+      // in "one row" mode the related tables may sit further away, and their cards carry data: reach further for them
+      const reach = state.caseSet ? CARD_DIST * 1.9 : CARD_DIST, most = state.caseSet ? MAX_CARDS + 3 : MAX_CARDS;
       let c = 0;
       for (const n of cands) {
-        if (n.__scr.d > CARD_DIST || c >= MAX_CARDS) break;
+        if (n.__scr.d > reach || c >= most) break;
         if (want.has(n)) continue;
         const b = cardBox(n, Math.min(n.cols, 12));
         if (fits(b)) { want.set(n, 'card'); boxes.push(b); c++; }
@@ -433,7 +444,7 @@ async function start() {
     nodes.forEach(n => { n.caseLabel = null; });
     state.caseSet = related ? new Set(related.keys()) : null;
     if (related) for (const [n, note] of related) if (note) n.caseLabel = `${n.name}  ${note}`;
-    clearLOD(c => c.kind === 'label');
+    clearLOD();        // labels carry the row counts and cards carry the row's values: both are redrawn
     refreshVisibility();
     updateLOD();
   }
@@ -729,6 +740,7 @@ async function start() {
   const app = {
     M, nodes, state, select, setSpot, setToggle, homeView, lod, graph, setCase, flyTo,
     refreshDetail: () => renderDetail(),
+    refreshCards: () => { clearLOD(c => c.kind !== 'label'); updateLOD(); },
     find: name => nodes.find(n => n.name.toLowerCase() === String(name).toLowerCase() || n.full.toLowerCase() === String(name).toLowerCase()),
     byFull: full => nodes.find(n => `${n.schema}.${n.name}`.toLowerCase() === String(full).toLowerCase()),
     spotlight: (list, label) => {

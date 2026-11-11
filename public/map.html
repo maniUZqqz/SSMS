@@ -185,6 +185,10 @@ body.side-closed #data { right: 12px; }
 body.has-data #hint { display: none; }
 body.has-data.has-detail #detail { bottom: 12px; }
 
+/* while one row is followed the drawer is lower, so the row's card in the scene has room; it can also be folded away */
+body.case-on #data { height: 26vh; min-height: 170px; }
+#data.min, body.case-on #data.min { height: auto; min-height: 0; }
+#data.min #data-grid, #data.min #data-hint, #data.min #f-col, #data.min #f-op, #data.min #f-val, #data.min #f-go, #data.min #f-clear { display: none; }
 #data-hint { padding: 5px 12px; font-size: 12px; color: var(--ink); background: rgba(57,135,229,.16); border-bottom: 1px solid var(--line2); }
 #data-hint[hidden] { display: none; }
 .d-actions > button.go { background: var(--accent); border-color: transparent; color: #fff; font-weight: 600; }
@@ -352,6 +356,7 @@ pre.code { margin: 0; padding: 12px; background: #0b0d12; border: 1px solid var(
     <input id="f-val" dir="auto" placeholder="مقدار…" spellcheck="false" autocomplete="off">
     <button class="mini" id="f-go">فیلتر</button>
     <button class="mini" id="f-clear" hidden>حذف فیلتر</button>
+    <button class="mini" id="data-toggle"></button>
     <button class="x" id="data-close" title="بستن">✕</button>
   </header>
   <div id="data-hint" hidden>روی هر سطر کلیک کنید تا «مورد» باز شود: مقدارهای همان سطر، سطرهایی که به آن‌ها اشاره می‌کند و سطرهای وابسته‌اش در جدول‌های دیگر.</div>

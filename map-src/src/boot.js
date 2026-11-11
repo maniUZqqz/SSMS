@@ -282,6 +282,7 @@ async function boot() {
   app = await run(fromStructure(json), {
     title: cur.title, cacheId: cur.id, restore, showCode,
     detailOverride: data.detailOverride, detailActions: data.detailActions, onSelect: data.onSelect,
+    cardData: data.cardData, onNodeClick: data.onNodeClick,
   });
   data.attach(app);
   document.body.classList.add('server-mode');
