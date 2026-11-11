@@ -62,6 +62,8 @@ export function createData({ api, mapId }) {
       $('#f-val').value = '';
     }
     $('#f-clear').hidden = !v.where;
+    // until a row is open, say what a click on a row does
+    $('#data-hint').hidden = !!cur || !v.rows.length;
     const flags = new Map(n.t.c.map(c => [c[0], c[2]]));
     const cols = v.columns.slice(0, MAX_COLS);
     let h = '';
@@ -216,10 +218,15 @@ export function createData({ api, mapId }) {
     const fkOf = new Map();
     c.parents.forEach((p, i) => p.fk.cols.forEach(([col]) => { if (!fkOf.has(col)) fkOf.set(col, i); }));
     const flags = new Map(n.t.c.map(x => [x[0], x[2]]));
+    // the way here, row by row; a click on a step goes back to it
+    const steps = [...trail, c];
+    const path = steps.length > 1 ? `<div class="case-path">${steps.map((s, i) =>
+      `<button class="crumb${s === c ? ' on' : ''}" data-case="jump" data-i="${i}" title="${esc(keyText(s))}"><span class="mono">${esc(s.node.name)}</span><small class="mono">${esc(trunc(keyText(s).replace(/^.*= /, ''), 16))}</small></button>`).join('<i>›</i>')}</div>` : '';
     let h = `<header><div class="d-kind">یک سطر از جدول<span class="mono">${esc(n.schema)}</span></div>` +
       `<h2 class="mono">${esc(n.name)}</h2><button class="x" id="d-close" title="بستن (Esc)">✕</button>` +
-      `<div class="case-key mono">${esc(trunc(keyText(c), 120))}</div></header>` +
-      `<div class="d-actions">${trail.length ? `<button data-case="back">→ سطر قبلی (${fa(trail.length)})</button>` : ''}` +
+      `<div class="case-key mono">${esc(trunc(keyText(c), 120))}</div>${path}` +
+      `<p class="case-hint">برای جلو رفتن: روی یک <b class="lnk">مقدار آبی</b> یا یکی از «سطرهای مرجع» کلیک کنید تا همان سطر باز شود؛ یا روی یکی از «سطرهای وابسته» کلیک کنید تا سطرهایش پایین صفحه بیاید و از آن‌جا سطر بعدی را انتخاب کنید.</p></header>` +
+      `<div class="d-actions">${trail.length ? `<button data-case="back">→ سطر قبلی</button>` : ''}` +
       `<button data-case="rows">سطرهای این جدول</button><button data-case="structure">ساختار جدول</button></div>`;
 
     h += `<details class="sec" open><summary>مقدارها<b>${fa(c.cols.length)}</b></summary><table class="cols vals"><tbody>` +
@@ -262,6 +269,10 @@ export function createData({ api, mapId }) {
     if (act === 'rows') return openTable(cur.node);
     if (act === 'back') { cur = trail.pop(); return show(); }
     const i = +b.dataset.i;
+    if (act === 'jump') {
+      if (i < trail.length) { cur = trail[i]; trail = trail.slice(0, i); show(); }
+      return;
+    }
     if (act === 'parent') {
       const p = cur.parents[i];
       if (p.state === 'found') openCase(app.nodes[p.fk.to], p.columns.map(x => x.name), p.row);
@@ -277,7 +288,7 @@ export function createData({ api, mapId }) {
     openTable,
     // what the detail panel shows instead of the structure, while a row of this table is open
     detailOverride: n => (cur && cur.node === n && !cur.structure ? caseHtml(cur) : null),
-    detailActions: n => `<button data-case="open">سطرها (داده)</button>${cur && cur.node === n ? '<button data-case="resume">بازگشت به سطر</button>' : ''}`,
+    detailActions: n => `<button data-case="open" class="go" title="سطرهای این جدول را نشان می‌دهد؛ با کلیک روی هر سطر، سطرهای مرتبطش در جدول‌های دیگر را دنبال کنید">سطرها و دنبال‌کردن موردی ▸</button>${cur && cur.node === n ? '<button data-case="resume">بازگشت به سطر</button>' : ''}`,
     onSelect: n => { if (!moving && cur && n !== cur.node) endCase(); },
   };
 }
