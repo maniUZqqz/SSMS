@@ -8,6 +8,9 @@ runtime/
 # Personal shortcut with local paths
 *.lnk
 
+# Database map: stored structures of the mapped databases (object names, SQL text of views and procedures)
+map-data/
+
 # OS files
 Thumbs.db
 Desktop.ini

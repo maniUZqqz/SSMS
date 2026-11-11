@@ -396,6 +396,27 @@ function newTab(opts = {}) {
 app.newTab = newTab;
 
 app.openEditTab = ({ conn, db, schema, name }) => newTab({ kind: 'edit', conn, db, title: `${name} (Edit Top 200)`, target: { schema, name } });
+
+// Database Map (3D): a page of its own (map.html) served by the same local server. For a SQL Server database
+// it first makes sure the database is on the map; without one it opens the list of mapped databases.
+app.openMap = async ({ conn, db, table } = {}) => {
+  const win = window.open('about:blank', 'webSqlStudioMap');    // opened right away, so the browser does not block it
+  let url = '/map.html';
+  try {
+    const c = conn && app.conns.get(conn);
+    if (c && (c.spec.type || 'mssql') === 'mssql' && db) {
+      const r = await api('mapOpen', { conn, db });
+      url += '?db=' + encodeURIComponent(r.id) + (table ? '&table=' + encodeURIComponent(table) : '');
+    }
+  } catch (e) {
+    toast(e.message, true);
+  }
+  if (win) win.location.href = url; else window.open(url, 'webSqlStudioMap');
+};
+function openMapForActive() {
+  const t = app.active, c = t && app.conns.get(t.conn);
+  app.openMap(c ? { conn: c.id, db: t.db || c.info.db } : {});
+}
 app.openDesignTab = ({ conn, db, schema, name, isNew }) =>
   newTab({ kind: 'design', conn, db, title: isNew ? 'New Table (Design)' : `${name} (Design)`, target: { schema, name, isNew: !!isNew } });
 
@@ -1546,6 +1567,7 @@ const MENUS = {
   tools: () => [
     ['Activity Monitor', activityMonitor, { icon: 'activity' }],
     ['Query History', showHistory, { icon: 'history' }],
+    ['Database Map (3D)', openMapForActive, { icon: 'map' }],
     null,
     ['Options…', showOptions, { icon: 'queryOptions' }],
   ],
@@ -1617,6 +1639,7 @@ on('tbPaste', pasteCmd);
 on('tbUndo', execCmd('undo'));
 on('tbRedo', execCmd('redo'));
 on('tbActivity', activityMonitor);
+on('tbMap', openMapForActive);
 on('tbHistory', showHistory);
 on('tbFind', editorCmd(ed => openFind(ed, false)));
 on('tbConnect', e => showConnectMenu(e.currentTarget));

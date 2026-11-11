@@ -1,0 +1,14 @@
+{
+  "name": "web-sql-studio-database-map",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Source of the 3D database map page (public/map.html). Build output: public/map/app.js",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "3d-force-graph": "^1.80.2",
+    "esbuild": "^0.28.2",
+    "three": "^0.187.0"
+  }
+}

@@ -854,6 +854,7 @@ const routes = {
       }
     }
     live.set(s.id, c);
+    if (!c.generic) dbmap.connected(s.id, c.info.db);
     if (save) {
       const stored = { ...s, password: savePassword ? s.password : '', rememberPassword: FILE_TYPES.has(s.type) || !!savePassword, create: false };
       const i = savedConns.findIndex(x => x.id === s.id);
@@ -1224,6 +1225,51 @@ function genericEdit(c, fn) {
 }
 
 // ---------------------------------------------------------------------------
+// Database map (./map): a 3D picture of a database's structure plus a row explorer, kept in step with the
+// real database. It reads over its own connections, so a long read never blocks Object Explorer:
+// one connection per server and lane ('' for structures, 'data' for rows).
+
+const mapLinks = new Map();
+const mapSpec = id => (live.get(id) || {}).spec || savedConns.find(x => x.id === id) || null;
+const mapReady = (id, spec) => live.has(id) || !needsPassword(spec);
+
+function mapSets(connId, sqlText, params, lane = '') {
+  const spec = mapSpec(connId);
+  if (!spec) throw new Error('This connection no longer exists.');
+  if ((spec.type || 'mssql') !== 'mssql') throw new Error('The database map is available for SQL Server connections.');
+  if (!mapReady(connId, spec)) {
+    const e = new Error('Not connected: connect to this server first (its password is not saved).');
+    e.notConnected = true;
+    throw e;
+  }
+  const key = connId + '|' + lane;
+  let link = mapLinks.get(key);
+  if (!link || link.password !== spec.password) {
+    if (link) link.meta.close();
+    link = { meta: new Session(metaConfig(toTedious({ type: 'mssql', ...spec })), connId, META_INIT), chain: Promise.resolve(), password: spec.password };
+    mapLinks.set(key, link);
+  }
+  return metaSets(link, sqlText, params);
+}
+
+const mapConnection = (id, spec = mapSpec(id)) => (spec
+  ? { id, name: displayName(spec), server: spec.server || '', type: spec.type || 'mssql', ready: mapReady(id, spec), live: live.has(id) }
+  : null);
+
+const dbmap = require('./map')({
+  dir: path.join(__dirname, 'map-data'),
+  settings: settings.map || {},
+  sets: mapSets,
+  quoteName,
+  connection: id => mapConnection(id),
+  connections: () => {
+    const ids = new Set([...savedConns.map(s => s.id), ...live.keys()]);
+    return [...ids].map(id => mapConnection(id)).filter(Boolean);
+  },
+});
+Object.assign(routes, dbmap.routes);
+
+// ---------------------------------------------------------------------------
 // HTTP
 
 const MIME = {
@@ -1231,6 +1277,7 @@ const MIME = {
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml',
+  '.woff2': 'font/woff2',
 };
 const allowedHosts = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`]);
 const allowedOrigins = new Set([...allowedHosts].map(h => 'http://' + h));
@@ -1264,7 +1311,12 @@ async function handleApi(req, res, name) {
   let body;
   try { body = JSON.parse((await readBody(req)) || '{}'); } catch (e) { return send(res, 400, { error: e.message }); }
   try {
-    send(res, 200, await routes[name](body || {}));
+    const out = await routes[name](body || {});
+    if (out && typeof out.rawJson === 'string') {
+      // a stored JSON document is passed through as it is
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(out.rawJson);
+    } else send(res, 200, out);
   } catch (e) {
     send(res, e.busy ? 409 : 500, { error: e.message, busy: !!e.busy, notConnected: !!e.notConnected, needPassword: !!e.needPassword });
   }
@@ -1307,5 +1359,6 @@ server.on('error', e => {
 server.listen(PORT, HOST, () => {
   console.log(`Web SQL Studio is running at ${APP_URL}`);
   console.log('Close this window (or press Ctrl+C) to stop it.');
+  dbmap.start();
   if (process.argv.includes('--open')) openBrowser();
 });

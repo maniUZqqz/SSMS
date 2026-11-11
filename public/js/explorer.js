@@ -482,6 +482,7 @@ function dbNode(c, d, depth) {
     menu: () => [
       ['New Query', () => app.newTab({ conn: c.id, db }), { icon: 'newQuery' }],
       ['Search in Code…', () => searchInCode(c, db), { icon: 'find' }],
+      ['Database Map (3D)', () => app.openMap({ conn: c.id, db }), { icon: 'map' }],
       ['Reports', [
         ['Database Properties', () => report(c, db, db + ' properties', DB_PROPS_SQL)],
         ['Disk Usage by Table', () => report(c, db, 'Disk usage', DISK_USAGE_SQL)],
@@ -873,6 +874,7 @@ function objectMenu(c, db, o) {
   if (t === 'U' || t === 'V') {
     items.push(['Select Top 1000 Rows', () => selectTop(c, db, o), { icon: 'resultsGrid' }]);
     if (t === 'U') items.push(['Edit Top 200 Rows', () => app.openEditTab({ conn: c.id, db, schema: o.sch, name: o.name }), { icon: 'table' }]);
+    items.push(['Show in Database Map (3D)', () => app.openMap({ conn: c.id, db, table: `${o.sch}.${o.name}` }), { icon: 'map' }]);
   }
   if (t === 'P' || t === 'PC') items.push(['Execute Stored Procedure…', () => scriptExec(c, db, o), { icon: 'execute' }]);
   if (isModule) items.push(['Modify', () => scriptModule(c, db, o, 'alter')]);

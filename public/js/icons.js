@@ -36,6 +36,7 @@ export const ICONS = {
   outdent: svg('<path d="M7 4h7M7 7h7M7 10h7M2 13h12" stroke="#6D6D6D"/><path d="M5 5 2 7.5 5 10z" fill="#1E7BD6"/>'),
   indent: svg('<path d="M7 4h7M7 7h7M7 10h7M2 13h12" stroke="#6D6D6D"/><path d="M2 5l3 2.5L2 10z" fill="#1E7BD6"/>'),
   activity: svg('<rect x="1.5" y="2" width="13" height="12" fill="#fff" stroke="#6D6D6D"/><path d="M3 11l3-4 2.5 2.5L13 4" fill="none" stroke="#388A34" stroke-width="1.6"/>'),
+  map: svg('<path d="M4 4.5 8 11.5M12 4.5 8 11.5M4 4.5h8" fill="none" stroke="#6D6D6D"/><circle cx="4" cy="4.5" r="2.4" fill="#1E7BD6"/><circle cx="12" cy="4.5" r="2.4" fill="#388A34"/><circle cx="8" cy="11.5" r="2.4" fill="#DD8A1F"/>'),
   filter: svg('<path d="M1.5 2.5h13L9.5 8.5v5l-3 1.5V8.5z" fill="#F5D58A" stroke="#A97D2B" stroke-linejoin="round"/>'),
   refresh: svg('<path d="M13 8a5 5 0 1 1-1.5-3.6" fill="none" stroke="#388A34" stroke-width="1.8"/><path d="M12.8 1.5v3.6H9.2" fill="none" stroke="#388A34" stroke-width="1.8"/>'),
   details: svg('<rect x="1.5" y="2" width="13" height="12" fill="#fff" stroke="#6D6D6D"/><path d="M1.5 5h13" stroke="#6D6D6D"/><path d="M3.5 7.5h3M8 7.5h4.5M3.5 9.5h3M8 9.5h4.5M3.5 11.5h3M8 11.5h4.5" stroke="#1E7BD6"/>'),
